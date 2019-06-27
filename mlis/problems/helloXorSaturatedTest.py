@@ -15,13 +15,29 @@ class SolutionModel(nn.Module):
         super(SolutionModel, self).__init__()
         self.input_size = input_size
         self.hidden_size = solution.hidden_size
+        self.solution = solution
         self.linear1 = nn.Linear(input_size, self.hidden_size)
         self.linear2 = nn.Linear(self.hidden_size, output_size)
+        
+    def set_context(self, context):
+        self.context = context
 
     def forward(self, x):
         x = self.linear1(x)
+        if self.solution.grid_search:
+            with torch.no_grad():
+              self.solution.grid_search.add_result('min_linear1_{}'.format(self.context.step), x.min().item())
+              self.solution.grid_search.add_result('max_linear1_{}'.format(self.context.step), x.max().item())
         x = torch.sigmoid(x)
+        if self.solution.grid_search:
+            with torch.no_grad():
+              self.solution.grid_search.add_result('min_sigmoid1_{}'.format(self.context.step), x.min().item())
+              self.solution.grid_search.add_result('max_sigmoid1_{}'.format(self.context.step), x.max().item())
         x = self.linear2(x)
+        if self.solution.grid_search:
+            with torch.no_grad():
+              self.solution.grid_search.add_result('min_linear2_{}'.format(self.context.step), x.min().item())
+              self.solution.grid_search.add_result('max_linear2_{}'.format(self.context.step), x.max().item())
         x = torch.sigmoid(x)
         return x
 
@@ -50,6 +66,7 @@ class Solution():
     def train_model(self, train_data, train_target, context):
         # Model represent our neural network
         model = SolutionModel(train_data.size(1), train_target.size(1), self)
+        model.set_context(context)
         # Optimizer used for training neural network
         optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
         step_till_correct = self.max_steps
@@ -80,16 +97,6 @@ class Solution():
             #self.print_stats(context.step, error, correct, total)
             # update model: model.parameters() -= lr * gradient
             optimizer.step()
-
-        if self.grid_search:
-            self.grid_search.add_result('error', error.item())
-            self.grid_search.add_result('step', step_till_correct)
-            if self.iter == self.iter_number-1:
-                if self.iter == self.iter_number-1:
-                    stats_error = self.grid_search.get_stats('error')
-                    stats_step = self.grid_search.get_stats('step')
-                    print('{} => Error {} {} Step {} {}'.format(self.grid_search.choice_str, *stats_error, *stats_step))
-        return model
 
     def print_stats(self, step, error, correct, total):
         if step % 1000 == 0:
@@ -148,8 +155,8 @@ if run_grid_search:
     parser.add_argument('-max_steps', type=int, nargs='+', default=[100])
     parser.add_argument('-hidden_size', type=int, nargs='+', default=[1])
     parser.add_argument('-learning_rate', type=float, nargs='+', default=[1.0])
-    results_file = 'helloxor_day2_results_data.pickle'
-    results_data = gs.ResultsData.load(results_file)
+    results_file = 'helloxor_day2_sigmoid_saturated_results_data.pickle'
+    results_data = gs.ResultsData()
     gs.GridSearch().run(Config(), case_number=1, results_data=results_data, grid_parser=parser)
     results_data.save(results_file)
 else:
